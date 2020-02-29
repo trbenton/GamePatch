@@ -100,7 +100,7 @@
             // repairToolStripMenuItem
             // 
             this.repairToolStripMenuItem.Name = "repairToolStripMenuItem";
-            this.repairToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.repairToolStripMenuItem.Size = new System.Drawing.Size(107, 22);
             this.repairToolStripMenuItem.Text = "Repair";
             // 
             // helpToolStripMenuItem
@@ -154,6 +154,7 @@
             // 
             // pictureBox1
             // 
+            this.pictureBox1.BackgroundImage = global::GamePatch.Properties.Resources.application_logo;
             this.pictureBox1.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
             this.pictureBox1.Location = new System.Drawing.Point(12, 27);
             this.pictureBox1.Name = "pictureBox1";
@@ -174,6 +175,7 @@
             this.Controls.Add(this.label1);
             this.Controls.Add(this.progressBar1);
             this.Controls.Add(this.menuStrip1);
+            this.DoubleBuffered = true;
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.MainMenuStrip = this.menuStrip1;

@@ -4,7 +4,7 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{755E9E76-276F-4A6C-B817-7A4427FD89B1}</ProjectGuid>
+    <ProjectGuid>{41ACA28B-95D4-4749-809C-D69DC62C8E10}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <RootNamespace>GamePatch</RootNamespace>
     <AssemblyName>GamePatch</AssemblyName>
@@ -81,10 +81,8 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Resources\application_logo.png" />
-  </ItemGroup>
-  <ItemGroup>
     <Content Include="Resources\application_icon.ico" />
+    <Content Include="Resources\application_logo.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
