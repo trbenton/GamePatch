@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
 
 namespace PatchCore.Files
@@ -67,16 +66,17 @@ namespace PatchCore.Files
             return succeeded;
         }
 
-        private void ProcessFile(string path)
+        private void ProcessFile(string remotePath)
         {
-            if (string.IsNullOrEmpty(path))
+            if (string.IsNullOrEmpty(remotePath))
             {
                 _logger.LogMessage("Skipping invalid empty file.");
                 return;
             }
 
-            var shortName = GetShortName(path);
-            var versions = _storage.GetVersionHistory(path);
+            var relativePath = Encoding.UTF8.GetString(Convert.FromBase64String(remotePath));
+            var shortName = FileUtility.CalculateHash(remotePath);
+            var versions = _storage.GetVersionHistory(remotePath);
             if (versions == null || versions.Count == 0)
             {
                 _logger.LogMessage($"Invalid version history for file {shortName}.");
@@ -86,14 +86,14 @@ namespace PatchCore.Files
             //sort the versions
             versions = versions.OrderBy(v => v.Version).ToList();
 
-            _logger.LogMessage($"Checking file {path} version.");
+            _logger.LogMessage($"Checking file {relativePath} version.");
 
-            var fullPath = Path.Combine(_root, Encoding.UTF8.GetString(Convert.FromBase64String(path)));
+            var fullPath = Path.Combine(_root, relativePath);
             if (WasDeleted(versions))
             {
                 try
                 {
-                    if (File.Exists(path))
+                    if (File.Exists(fullPath))
                     {
                         File.Delete(fullPath);
                         _logger.LogMessage($"Removing old file {shortName}.");
@@ -110,7 +110,7 @@ namespace PatchCore.Files
             string localHash;
             try
             {
-                localHash = CalculateFileHash(fullPath);
+                localHash = FileUtility.CalculateFileHash(fullPath);
             }
             catch (Exception)
             {
@@ -129,28 +129,28 @@ namespace PatchCore.Files
             if (currentVersion == null || latestBaseVersion.Version > currentVersion.Version)
             {
                 //handle updating a new file to the latest
-                var tempFilePath = FetchRemoteToTemp(path, latestBaseVersion);
-                PatchToLatest(path, tempFilePath, fullPath, versions, latestBaseVersion);
+                var tempFilePath = FetchRemoteToTemp(remotePath, latestBaseVersion);
+                PatchToLatest(remotePath, tempFilePath, fullPath, versions, latestBaseVersion);
 
             }
             else if (!HasLatestVersion(versions, currentVersion.Version))
             {
                 //handle updating an existing local file...
                 var tempFilePath = CopyFromLocalToTemp(fullPath);
-                PatchToLatest(path, tempFilePath, fullPath, versions, currentVersion);
+                PatchToLatest(remotePath, tempFilePath, fullPath, versions, currentVersion);
             }
 
             //do cleanup
             CleanupTempDirectory();
         }
 
-        private void PatchToLatest(string path, string tempLocation, string finalLocation, List<FileInfo> versions, FileInfo currentInfo)
+        private void PatchToLatest(string remotePath, string tempLocation, string finalLocation, List<FileInfo> versions, FileInfo currentInfo)
         {
             var upgradeVersion = GetUpgradeVersion(versions, currentInfo.Version);
             while (upgradeVersion != null)
             {
                 //handle patch
-                string patchPath = FetchRemoteToTemp(path, upgradeVersion);
+                string patchPath = FetchRemoteToTemp(remotePath, upgradeVersion);
                 PatchFile(tempLocation, patchPath, upgradeVersion.Hash);
                 
                 //get next
@@ -173,10 +173,10 @@ namespace PatchCore.Files
             return tempPath;
         }
 
-        private string FetchRemoteToTemp(string path, FileInfo info)
+        private string FetchRemoteToTemp(string remotePath, FileInfo info)
         {
             var tempPath = Path.Combine(GetTempDirectory(), GetTempFileName());
-            _storage.DownloadContent(path, FileInfo.ToName(info), tempPath);
+            _storage.DownloadContent(remotePath, FileInfo.ToName(info), tempPath);
             return tempPath;
         }
 
@@ -251,6 +251,10 @@ namespace PatchCore.Files
             var tempDir = GetTempDirectory();
             try
             {
+                if (!Directory.Exists(tempDir))
+                {
+                    return;
+                }
                 var dirInfo = new DirectoryInfo(tempDir);
                 //cleaup files
                 foreach (var file in dirInfo.EnumerateFiles())
@@ -289,47 +293,6 @@ namespace PatchCore.Files
                 throw new InvalidOperationException("Received a null response from get base files.");
             }
             return files;
-        }
-
-        private string CalculateFileHash(string fullPath)
-        {
-            using (var inputStream = new FileStream(fullPath, FileMode.Open))
-            {
-                using (var md5 = MD5.Create())
-                {
-                    var md5Hash = CalculateFileHash(inputStream, md5);
-                    return string.Join(string.Empty, md5Hash.Select(b => b.ToString("X2")));
-                }
-            }
-        }
-
-        private string GetShortName(string path)
-        {
-            var md5 = MD5.Create();
-            var inputBytes = Encoding.UTF8.GetBytes(path);
-            var hash = md5.ComputeHash(inputBytes);
-
-            var sb = new StringBuilder();
-            for (int i = 0; i < hash.Length; i++)
-            {
-                sb.Append(hash[i].ToString("X2"));
-            }
-            return sb.ToString();
-        }
-
-        private byte[] CalculateFileHash(Stream input, HashAlgorithm algorithm)
-        {
-            const int bufferSize = ushort.MaxValue;
-
-            byte[] buffer = new byte[bufferSize];
-            int readCount;
-            while ((readCount = input.Read(buffer, 0, bufferSize)) > 0)
-            {
-                algorithm.TransformBlock(buffer, 0, readCount, buffer, 0);
-            }
-
-            algorithm.TransformFinalBlock(buffer, 0, readCount);
-            return algorithm.Hash;
         }
     }
 }
