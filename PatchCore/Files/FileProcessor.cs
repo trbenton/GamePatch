@@ -28,7 +28,7 @@ namespace PatchCore.Files
 
         public bool Process()
         {
-            _progressTracker.SetMessage("Checking files...");
+            _progressTracker.SetMessage("Patching files...");
             _progressTracker.SetProgress(0.0f);
 
             bool succeeded = true;
@@ -44,6 +44,7 @@ namespace PatchCore.Files
                 return false;
             }
 
+            int processed = 0;
             foreach (var file in files)
             {
                 try
@@ -55,6 +56,12 @@ namespace PatchCore.Files
                     _logger.LogMessage($"Failed to validate file {file}.");
                     succeeded = false;
                 }
+                finally
+                {
+                    //just to be safe, try to cleanup temp directory...
+                    CleanupTempDirectory();
+                }
+                _progressTracker.SetProgress((float)processed / files.Count);
             }
 
             return succeeded;
@@ -123,18 +130,38 @@ namespace PatchCore.Files
             {
                 //handle updating a new file to the latest
                 var tempFilePath = FetchRemoteToTemp(path, latestBaseVersion);
-                PatchToLatest(tempFilePath, fullPath, latestBaseVersion);
+                PatchToLatest(path, tempFilePath, fullPath, versions, latestBaseVersion);
 
             }
-            else
+            else if (!HasLatestVersion(versions, currentVersion.Version))
             {
                 //handle updating an existing local file...
                 var tempFilePath = CopyFromLocalToTemp(fullPath);
-                PatchToLatest(tempFilePath, fullPath, currentVersion);
+                PatchToLatest(path, tempFilePath, fullPath, versions, currentVersion);
             }
+
+            //do cleanup
+            CleanupTempDirectory();
         }
 
-        private void PatchToLatest(string tempLocation, string finalLocation, FileInfo info)
+        private void PatchToLatest(string path, string tempLocation, string finalLocation, List<FileInfo> versions, FileInfo currentInfo)
+        {
+            var upgradeVersion = GetUpgradeVersion(versions, currentInfo.Version);
+            while (upgradeVersion != null)
+            {
+                //handle patch
+                string patchPath = FetchRemoteToTemp(path, upgradeVersion);
+                PatchFile(tempLocation, patchPath, upgradeVersion.Hash);
+                
+                //get next
+                currentInfo = upgradeVersion;
+                upgradeVersion = GetUpgradeVersion(versions, currentInfo.Version);
+            }
+            //copy from temp to final location
+            File.Copy(tempLocation, finalLocation);
+        }
+
+        private void PatchFile(string filePath, string patchPath, string hash)
         {
 
         }
@@ -190,9 +217,58 @@ namespace PatchCore.Files
             return versions.Where(v => v.State == FileState.BaseVersion).OrderByDescending(v => v.Version).First();
         }
 
+        private FileInfo GetUpgradeVersion(List<FileInfo> versions, int currentVersion)
+        {
+            var versionNumbers = versions.Select(v => v.Version).OrderBy(v => v).ToList();
+            int index = versionNumbers.IndexOf(currentVersion);
+            if (index < 0)
+            {
+                return null;
+            }
+
+            int newVersionIndex = index + 1;
+            if (newVersionIndex < 0 || newVersionIndex > versionNumbers.Count - 1)
+            {
+                return null;
+            }
+
+            int versionNumber = versionNumbers[newVersionIndex];
+            return versions.SingleOrDefault(v => v.Version == versionNumber);
+        }
+
+        private bool HasLatestVersion(List<FileInfo> versions, int currentVersion)
+        {
+            return GetUpgradeVersion(versions, currentVersion) == null;
+        }
+
         private int GetLatestVersionNumber(List<FileInfo> versions)
         {
             return versions.Select(v => v.Version).OrderByDescending(v => v).First();
+        }
+
+        private void CleanupTempDirectory()
+        {
+            var tempDir = GetTempDirectory();
+            try
+            {
+                var dirInfo = new DirectoryInfo(tempDir);
+                //cleaup files
+                foreach (var file in dirInfo.EnumerateFiles())
+                {
+                    file.Delete();
+                }
+                //cleanup directories
+                foreach (var dir in dirInfo.EnumerateDirectories())
+                {
+                    dir.Delete(true);
+                }
+            }
+            catch (Exception)
+            {
+                _logger.LogMessage("Unable to cleanup temp directory, ensure you have the correct permissions for this directory.");
+                _logger.LogMessage(tempDir);
+                return;
+            }
         }
 
         private string GetTempDirectory()
