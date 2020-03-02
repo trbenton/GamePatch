@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Octodiff.Core;
+using Octodiff.Diagnostics;
 
 namespace PatchCore.Files
 {
@@ -163,7 +165,25 @@ namespace PatchCore.Files
 
         private void PatchFile(string filePath, string patchPath, string hash)
         {
+            var newFilePath = Path.GetTempFileName();
+            var deltaApplier = new DeltaApplier { SkipHashCheck = false };
+            using (var basisStream =new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                using (var deltaStream = new FileStream(patchPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    using (var newFileStream = new FileStream(newFilePath, FileMode.Create, FileAccess.ReadWrite, FileShare.Read))
+                    {
+                        deltaApplier.Apply(basisStream, new BinaryDeltaReader(deltaStream, new NullProgressReporter()), newFileStream);
+                    }
+                }
+            }
 
+            if (FileUtility.CalculateFileHash(newFilePath) != hash)
+            {
+                throw new InvalidOperationException("Patched file has an invalid hash.");
+            }
+            File.Copy(newFilePath, filePath);
+            File.Delete(newFilePath);
         }
 
         private string CopyFromLocalToTemp(string fullPath)

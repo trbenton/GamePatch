@@ -5,6 +5,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Octodiff.Core;
+using Octodiff.Diagnostics;
+using FileStream = System.IO.FileStream;
 
 namespace PatchCore.Files
 {
@@ -119,6 +122,32 @@ namespace PatchCore.Files
 
         private void CreatePatchFile(string fullNewPath, string fullOldPath, string dest)
         {
+            //create signature file
+            var sigFilePath = Path.GetTempFileName();
+            var signatureBuilder = new SignatureBuilder();
+            using (var fileStream = new FileStream(fullOldPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                using (var signatureStream = new FileStream(sigFilePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Read))
+                {
+                    signatureBuilder.Build(fileStream, new SignatureWriter(signatureStream));
+                }
+            }
+
+            //create delta
+            var deltaBuilder = new DeltaBuilder();
+            using (var newFileStream = new FileStream(fullNewPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                using (var signatureFileStream = new FileStream(sigFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    using (var deltaStream = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.Read))
+                    {
+                        deltaBuilder.BuildDelta(newFileStream, new SignatureReader(signatureFileStream, new NullProgressReporter()), new AggregateCopyOperationsDecorator(new BinaryDeltaWriter(deltaStream)));
+                    }
+                }
+            }
+
+            //cleanup sig file
+            File.Delete(sigFilePath);
         }
 
         private bool WasLastVersionDeleted(List<FileInfo> versions)
