@@ -154,7 +154,7 @@ namespace PatchCore.Files
                 //handle patch
                 string patchPath = FetchRemoteToTemp(remotePath, upgradeVersion);
                 PatchFile(tempLocation, patchPath, upgradeVersion.Hash);
-                
+
                 //get next
                 currentInfo = upgradeVersion;
                 upgradeVersion = GetUpgradeVersion(versions, currentInfo.Version);
@@ -167,7 +167,7 @@ namespace PatchCore.Files
         {
             var newFilePath = Path.GetTempFileName();
             var deltaApplier = new DeltaApplier { SkipHashCheck = false };
-            using (var basisStream =new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var basisStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 using (var deltaStream = new FileStream(patchPath, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
